@@ -1,0 +1,2 @@
+/home/karthik/Device_drivers/ldd/custom_drivers/001helloworld/main.o
+

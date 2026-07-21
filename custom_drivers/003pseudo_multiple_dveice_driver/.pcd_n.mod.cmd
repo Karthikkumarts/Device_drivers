@@ -1,0 +1,1 @@
+cmd_/home/karthik/Device_drivers/ldd/custom_drivers/003pseudo_multiple_dveice_driver/pcd_n.mod := { echo  /home/karthik/Device_drivers/ldd/custom_drivers/003pseudo_multiple_dveice_driver/pcd_n.o;  echo; } > /home/karthik/Device_drivers/ldd/custom_drivers/003pseudo_multiple_dveice_driver/pcd_n.mod
