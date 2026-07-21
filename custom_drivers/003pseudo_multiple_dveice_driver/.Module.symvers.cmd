@@ -1,1 +1,0 @@
-cmd_/home/karthik/Device_drivers/ldd/custom_drivers/003pseudo_multiple_dveice_driver/Module.symvers := sed 's/ko$$/o/' /home/karthik/Device_drivers/ldd/custom_drivers/003pseudo_multiple_dveice_driver/modules.order | scripts/mod/modpost -m    -o /home/karthik/Device_drivers/ldd/custom_drivers/003pseudo_multiple_dveice_driver/Module.symvers -e -i Module.symvers   -T -
