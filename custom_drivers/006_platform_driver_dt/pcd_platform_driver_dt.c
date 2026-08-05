@@ -8,6 +8,7 @@
 #include<linux/init.h>
 #include<linux/slab.h>
 #include<linux/mod_devicetable.h>
+#include<linux/of.h>
 #define MEM_BUFFER_SIZE_1 512
 #define MEM_BUFFER_SIZE_2 512
 #define MEM_BUFFER_SIZE_3 512
@@ -17,15 +18,28 @@
 #undef pr_fmt
 #define pr_fmt(fmt) "%s : "fmt,__func__
 
-#define RDONLY 0x01
-#define WRONLY 0X10
-#define RDWR 0x11
 /* this is our pseudo device where we will read write the memory*/
 char device_buffer_pcdev1[MEM_BUFFER_SIZE_1];
 char device_buffer_pcdev2[MEM_BUFFER_SIZE_2];
 char device_buffer_pcdev3[MEM_BUFFER_SIZE_3];
 char device_buffer_pcdev4[MEM_BUFFER_SIZE_4];
-
+enum pcdev_name
+{
+	PCDEVA1X,
+	PCDEVB1X,
+	PCDEVC1X,
+	PCDEVD1X
+};
+struct device_config
+{
+	int config1;
+	int config2;
+};
+struct device_config pcdev_config[] = {
+	[PCDEVA1X] = {.config1 = 60 , .config2 = 20},
+	[PCDEVB1X] = {.config1 = 70 , .config2 = 21},
+	[PCDEVC1X] = {.config1 = 80 , .config2 = 22}
+};
 
 struct pcdev_private_data
 {
@@ -167,33 +181,68 @@ struct file_operations pcd_fops =
 	.read = pcd_read,
 	.write = pcd_write
 };
+struct pcdev_platform_data * pcdev_get_data_from_dt( struct device *dev)
+{
+	struct device_node * dev_node = dev->of_node;
+	struct pcdev_platform_data *pdata;
 
+	if(!dev_node)
+	{
+		return NULL;
+	}
+
+	pdata = devm_kzalloc(dev,sizeof(*pdata),GFP_KERNEL);
+	if(!pdata)
+	{
+		dev_info(dev,"cannot allocate the memory\n");
+		return ERR_PTR(-ENOMEM);
+	}
+
+	if(of_property_read_string(dev_node, "org,serial_number",&pdata->serial_number))
+	{
+		dev_info(dev,"Missing serial number\n");
+			return ERR_PTR(-EINVAL);
+	}
+	if(of_property_read_u32(dev_node, "org,perm",&pdata->perm))
+	{
+		dev_info(dev,"Missing permission\n");
+			return ERR_PTR(-EINVAL);
+	}
+	if(of_property_read_u32(dev_node, "org,size",&pdata->size))
+	{
+		dev_info(dev,"Missing size\n");
+			return ERR_PTR(-EINVAL);
+	}
+
+	return pdata;
+}
 int pcd_platform_driver_probe(struct platform_device * pcdev)
 {
 	int ret;
 	pr_info("A matching device detected\n");
-
 	struct pcdev_private_data *dev_data;
 
 	struct pcdev_platform_data * pdata; //instead of taking extra structure for platfrom_data , first allocate the memory for dev_data and then directly take the dev_get_platdata to dev_data->pdata.
         
 	/* 1. Get the platform data */
 	
+	pdata = pcdev_get_data_from_dt(&pcdev->dev); //get the data from device tree node
 	//pdata = pcdev->dev.platform_data;
-	pdata = (struct pcdev_platform_data *)dev_get_platdata(&pcdev->dev);
 	if(!pdata)
 	{
-		pr_info("NO platform data available\n");
-		ret = -EINVAL;
-		goto out;
+		pdata = (struct pcdev_platform_data *)dev_get_platdata(&pcdev->dev); //returs platform data
+		if(!pdata)
+		{
+			pr_info("NO platform data available\n");
+			return -EINVAL;
+		}
 	}
 	/* 2.Dynamically allocate memory for device private data */
 
 	dev_data = kzalloc(sizeof(*dev_data),GFP_KERNEL);
 	if(!dev_data){
 		pr_info("cannot allocate memory\n");
-		ret = -ENOMEM;
-		goto out;
+		return -ENOMEM;
 	}
 	dev_data->pdata.size = pdata->size;
 	dev_data->pdata.perm = pdata->perm;
@@ -203,13 +252,15 @@ int pcd_platform_driver_probe(struct platform_device * pcdev)
 	pr_info("Device permission : %d\n",dev_data->pdata.perm);
 	pr_info("Device size : %d\n",dev_data->pdata.size);
 
+	pr_info("config item 1 : %d\n",pcdev_config[pcdev->id_entry->driver_data].config1);
+	pr_info("config item 2 : %d\n",pcdev_config[pcdev->id_entry->driver_data].config2);
+
 	/* 3. Dynamically allocate the memory for device buffer using size information from the platform data */
 
 	dev_data->buff = kzalloc(dev_data->pdata.size,GFP_KERNEL);
 	if(!dev_data->buff){
 		pr_info("cannot allocate memory for buffer\n");
-		ret = -ENOMEM;
-		goto dev_data_free;
+		return -ENOMEM;
 	}
 
 	/*4. Get the device number */
@@ -222,7 +273,7 @@ int pcd_platform_driver_probe(struct platform_device * pcdev)
 	if(ret < 0)
 	{
 		pr_err("Cdev add failed\n");
-		goto buffer_free;
+		return ret;
 	}
 	dev_data->cdev.owner = THIS_MODULE;
 
@@ -232,29 +283,20 @@ int pcd_platform_driver_probe(struct platform_device * pcdev)
 	{
 		pr_err("device creation failed\n");
 		ret = PTR_ERR(pcdrv_data.device_pcd);
-		goto cdev_del;
+	        cdev_del(&dev_data->cdev);
 	}
 
 	dev_set_drvdata(&pcdev->dev,dev_data);
 	pcdrv_data.total_devices++;
 	pr_info("Probe was successfull\n");
 	return 0;
-		
-cdev_del:
-	cdev_del(&dev_data->cdev);
-buffer_free:
-	kfree(dev_data->buff);
-dev_data_free:
-	kfree(dev_data);
-out:
-	pr_info("Device probe failed ");
-	return ret;
 }
 
 /*void for the host  and int for beagle bone as kernel version are differnet */
-//int  pcd_platform_driver_remove(struct platform_device * pcdev)
-void  pcd_platform_driver_remove(struct platform_device * pcdev)
+int  pcd_platform_driver_remove(struct platform_device * pcdev)
+//void  pcd_platform_driver_remove(struct platform_device * pcdev)
 {
+#if 0
 	struct pcdev_private_data *dev_data = dev_get_drvdata(&pcdev->dev); 
 	/* 1. Remove  a device which was created by device_create */
 	device_destroy(pcdrv_data.class_pcd , dev_data->dev_num);
@@ -267,17 +309,37 @@ void  pcd_platform_driver_remove(struct platform_device * pcdev)
 	kfree(dev_data);
 	
 	pcdrv_data.total_devices--;
+#endif
 	pr_info("A device removed\n");
+	return 0;
 }
 
+struct platform_device_id pcdev_ids[] = {
+	[0] = {.name = "pcdev-A1x",.driver_data = PCDEVA1X},
+	[1] = {.name = "pcdev-B1x",.driver_data=PCDEVB1X},
+	[2] = {.name = "pcdev-C1x",.driver_data=PCDEVC1X}
+};
+
+struct of_device_id org_pcdev_dt_match[] =
+{
+	{.name = "pcdev-A1x",.data = (void*)PCDEVA1X},
+	{.name = "pcdev-B1x",.data=(void *)PCDEVB1X},
+	{.name = "pcdev-C1x",.data=(void *)PCDEVC1X},
+	{.name = "pcdev-D1x",.data=(void *)PCDEVD1X},
+	{}
+
+};
 struct platform_driver pcd_platform_driver = {
 
 	.probe = pcd_platform_driver_probe,
 	.remove = pcd_platform_driver_remove,
+	.id_table = pcdev_ids,
 	.driver = {
-		.name = "pseudo-char-device"
-	}
+        	.name = "pcdev",
+		.of_match_table = org_pcdev_dt_match
+    },
 };
+//.driver will no longer be required for device and driver matching
 #define MAX_DEVICE 10
 static int __init pcd_platform_driver_init(void)
 {
@@ -295,7 +357,9 @@ static int __init pcd_platform_driver_init(void)
 	//pcdrv_data.class_pcd = class_create(THIS_MODULE,"pcd_class");
 	
 	//for latest kernel 
-	pcdrv_data.class_pcd = class_create("pcd_class");
+	//pcdrv_data.class_pcd = class_create("pcd_class");
+	//for BBB
+	pcdrv_data.class_pcd = class_create(THIS_MODULE,"pcd_class");
 	if(IS_ERR(pcdrv_data.class_pcd))
 	{
 		pr_err("class creation failed\n");
