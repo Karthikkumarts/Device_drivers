@@ -225,10 +225,11 @@ int pcd_platform_driver_probe(struct platform_device * pcdev)
 
 	struct pcdev_platform_data * pdata; //instead of taking extra structure for platfrom_data , first allocate the memory for dev_data and then directly take the dev_get_platdata to dev_data->pdata.
 
-	struct of_device_id * match;
+	const struct of_device_id * match;
     int driver_data;    
 	/* 1. Get the platform data */
-	
+
+	// start TYPE 1
 	pdata = pcdev_get_data_from_dt(&pcdev->dev); //get the data  from device tree node
 	if(IS_ERR(pdata))
 	{
@@ -252,7 +253,31 @@ int pcd_platform_driver_probe(struct platform_device * pcdev)
 		//match = of_match_device(pcdev->dev.driver->of_match_table,&pcdev->dev);
 		//driver_data = (int)match->data;
 	}
-	
+	//END TYPE 1
+
+		//Type 2
+	/*match = of_match_device(of_match_ptr(org_pcdev_dt_match),dev); // by using this of_match_ptr we can determine the matching is from device tree or not
+	if(match)
+	{
+		pdata = pcdev_get_data_from_dt(&pcdev->dev); //get the data  from device tree node
+		if(IS_ERR(pdata))
+		{
+			return PTR_ERR(-EINVAL);
+		}	
+		driver_data = (int)match->data;
+	}
+	else
+	{
+		pdata = (struct pcdev_platform_data *)dev_get_platdata(&pcdev->dev); //returs platform data
+		driver_data = pcdev->id_entry->driver_data;
+	}
+	if(!pdata)
+	{
+		dev_info(&pcdev->dev."No platform data available");
+		return -EINVAL;
+	}*/
+	//END TYPE 2
+
 	/* 2.Dynamically allocate memory for device private data */
 
 	dev_data = kzalloc(sizeof(*dev_data),GFP_KERNEL);
