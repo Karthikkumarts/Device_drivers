@@ -1,4 +1,3 @@
-//karthik
 struct pcdev_platform_data
 {
 	int size;
