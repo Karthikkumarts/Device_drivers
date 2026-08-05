@@ -9,6 +9,7 @@
 #include<linux/slab.h>
 #include<linux/mod_devicetable.h>
 #include<linux/of.h>
+#include<linux/of_device.h>
 #define MEM_BUFFER_SIZE_1 512
 #define MEM_BUFFER_SIZE_2 512
 #define MEM_BUFFER_SIZE_3 512
@@ -223,20 +224,35 @@ int pcd_platform_driver_probe(struct platform_device * pcdev)
 	struct pcdev_private_data *dev_data;
 
 	struct pcdev_platform_data * pdata; //instead of taking extra structure for platfrom_data , first allocate the memory for dev_data and then directly take the dev_get_platdata to dev_data->pdata.
-        
+
+	struct of_device_id * match;
+    int driver_data;    
 	/* 1. Get the platform data */
 	
-	pdata = pcdev_get_data_from_dt(&pcdev->dev); //get the data from device tree node
-	//pdata = pcdev->dev.platform_data;
+	pdata = pcdev_get_data_from_dt(&pcdev->dev); //get the data  from device tree node
+	if(IS_ERR(pdata))
+	{
+		return -EINVAL;
+	}
 	if(!pdata)
 	{
+		//manual [device_setup]
+		//pdata = pcdev->dev.platform_data;
 		pdata = (struct pcdev_platform_data *)dev_get_platdata(&pcdev->dev); //returs platform data
 		if(!pdata)
 		{
 			pr_info("NO platform data available\n");
 			return -EINVAL;
 		}
+		driver_data = pcdev->id_entry->driver_data;
 	}
+	else
+	{
+		driver_data = (int)of_device_get_match_data(&pcdev->dev);
+		//match = of_match_device(pcdev->dev.driver->of_match_table,&pcdev->dev);
+		//driver_data = (int)match->data;
+	}
+	
 	/* 2.Dynamically allocate memory for device private data */
 
 	dev_data = kzalloc(sizeof(*dev_data),GFP_KERNEL);
@@ -252,8 +268,8 @@ int pcd_platform_driver_probe(struct platform_device * pcdev)
 	pr_info("Device permission : %d\n",dev_data->pdata.perm);
 	pr_info("Device size : %d\n",dev_data->pdata.size);
 
-	pr_info("config item 1 : %d\n",pcdev_config[pcdev->id_entry->driver_data].config1);
-	pr_info("config item 2 : %d\n",pcdev_config[pcdev->id_entry->driver_data].config2);
+	pr_info("config item 1 : %d\n",pcdev_config[driver_data].config1);
+	pr_info("config item 2 : %d\n",pcdev_config[driver_data].config2);
 
 	/* 3. Dynamically allocate the memory for device buffer using size information from the platform data */
 
@@ -288,7 +304,7 @@ int pcd_platform_driver_probe(struct platform_device * pcdev)
 
 	dev_set_drvdata(&pcdev->dev,dev_data);
 	pcdrv_data.total_devices++;
-	pr_info("Probe was successfull\n");
+	dev_info(&pcdev->dev,"Probe was successfull\n");
 	return 0;
 }
 
@@ -296,7 +312,7 @@ int pcd_platform_driver_probe(struct platform_device * pcdev)
 int  pcd_platform_driver_remove(struct platform_device * pcdev)
 //void  pcd_platform_driver_remove(struct platform_device * pcdev)
 {
-#if 0
+#if 1
 	struct pcdev_private_data *dev_data = dev_get_drvdata(&pcdev->dev); 
 	/* 1. Remove  a device which was created by device_create */
 	device_destroy(pcdrv_data.class_pcd , dev_data->dev_num);
@@ -310,7 +326,7 @@ int  pcd_platform_driver_remove(struct platform_device * pcdev)
 	
 	pcdrv_data.total_devices--;
 #endif
-	pr_info("A device removed\n");
+	dev_info(&pcdev->dev,"A device removed\n");
 	return 0;
 }
 
