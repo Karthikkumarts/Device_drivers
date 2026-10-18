@@ -305,7 +305,7 @@ int pcd_platform_driver_probe(struct platform_device * pcdev)
 	}
 
 	/*4. Get the device number */
-	dev_data->dev_num = pcdrv_data.device_num_base + pcdev->id;
+	dev_data->dev_num = pcdrv_data.device_num_base + pcdrv_data.total_devices;
 
 	/* 5. Do cdev init and cdev add */
 	cdev_init(&dev_data->cdev,&pcd_fops);
@@ -319,7 +319,7 @@ int pcd_platform_driver_probe(struct platform_device * pcdev)
 	dev_data->cdev.owner = THIS_MODULE;
 
 	/* 6. create  device file for the detected platform device */
-	pcdrv_data.device_pcd = device_create(pcdrv_data.class_pcd,NULL,dev_data->dev_num,NULL,"pcdev-%d",pcdev->id);
+	pcdrv_data.device_pcd = device_create(pcdrv_data.class_pcd,&pcdev->dev,dev_data->dev_num,NULL,"pcdev-%d",pcdrv_data.total_devices);
 	if(IS_ERR(pcdrv_data.device_pcd))
 	{
 		pr_err("device creation failed\n");
@@ -363,10 +363,10 @@ struct platform_device_id pcdev_ids[] = {
 
 struct of_device_id org_pcdev_dt_match[] =
 {
-	{.name = "pcdev-A1x",.data = (void*)PCDEVA1X},
-	{.name = "pcdev-B1x",.data=(void *)PCDEVB1X},
-	{.name = "pcdev-C1x",.data=(void *)PCDEVC1X},
-	{.name = "pcdev-D1x",.data=(void *)PCDEVD1X},
+	{.compatible = "pcdev-A1x",.data = (void*)PCDEVA1X},
+	{.compatible = "pcdev-B1x",.data=(void *)PCDEVB1X},
+	{.compatible = "pcdev-C1x",.data=(void *)PCDEVC1X},
+	{.compatible = "pcdev-D1x",.data=(void *)PCDEVD1X},
 	{}
 
 };

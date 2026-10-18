@@ -13,9 +13,9 @@
 #undef pr_fmt
 #define pr_fmt(fmt) "%s : "fmt,__func__
 
-#define RDONLY 0x01
-#define WRONLY 0X10
-#define RDWR 0x11
+#define RDONLY 0444
+#define WRONLY 0222
+#define RDWR 0666
 /* this is our pseudo device where we will read write the memory*/
 char device_buffer_pcdev1[MEM_BUFFER_SIZE_1];
 char device_buffer_pcdev2[MEM_BUFFER_SIZE_2];
@@ -160,11 +160,20 @@ int check_permission(int dev_perm , int acc_mode)
 
 	return -EPERM;
 }
-static int pcd_uevent(struct device *dev, struct kobj_uevent_env *env)
+static int pcd_uevent(const struct device *dev, struct kobj_uevent_env *env)
 {
-    pr_info("pcd_uevent called\n");
+	int minor = MINOR(dev->devt); // Get the minor number (0, 1, 2, or 3)
+	int mode = 0600;              // Default fallback permission (Root Only)
 
-    return add_uevent_var(env, "DEVMODE=%#o", 0666);
+	pr_info("pcd_uevent called for minor %d\n", minor);
+
+	// Ensure we don't index out of bounds of our array
+	if (minor < NO_OF_DEVICES) {
+		mode = pcdrv_data.pcdev_data[minor].perm;
+	}
+
+	// Pass the specific mode dynamically to udev
+	return add_uevent_var(env, "DEVMODE=%#o", mode);
 }
 int pcd_open (struct inode *inode, struct file * filp)
 {
@@ -174,7 +183,6 @@ int pcd_open (struct inode *inode, struct file * filp)
 	/* find out which device file open was attempted  by user space */
 	minor_number = MINOR(inode->i_rdev);
 	pr_info("minor number : %d\n",minor_number);
-pcdrv_data.class_pcd->dev_uevent = pcd_uevent;
 	/*get device's private data*/
 	pcdev_data = container_of(inode->i_cdev,struct pcdev_private_data,cdev);
 
@@ -218,14 +226,15 @@ static int __init pcd_driver_init(void)
 	}
 
 	/*4. create device class under /sys/class */
-	pcdrv_data.class_pcd = class_create(THIS_MODULE,"pcd_n_class");
+	//pcdrv_data.class_pcd = class_create(THIS_MODULE,"pcd_n_class");
+	pcdrv_data.class_pcd = class_create("pcd_n_class");
 	if(IS_ERR(pcdrv_data.class_pcd))
 	{
 		pr_info("class_create failed\n" );
 		ret = PTR_ERR(pcdrv_data.class_pcd);
 		goto unreg_chardev;
 	}
-
+	pcdrv_data.class_pcd->dev_uevent = pcd_uevent;
 	for(i = 0 ; i < NO_OF_DEVICES ; i++)
 	{
 		// device number is type dev_t not array to access in using index[i] ,rather it is  range of consecutive device numbers
